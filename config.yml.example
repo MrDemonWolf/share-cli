@@ -1,0 +1,7 @@
+# Share Server
+server:
+  url: ""
+
+# Share User credentials
+creds:
+  apikey: ""
