@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
@@ -118,8 +119,8 @@ func main() {
 
 		json.NewDecoder(resp.Body).Decode(data)
 
-		log.Print("Your file has been uploaded")
-		log.Printf("URL: %s \n", data.File.URL)
-		log.Printf("Delete URL: %s \n", data.File.Delete)
+		fmt.Print("Your file has been uploaded")
+		fmt.Printf("URL: %s \n", data.File.URL)
+		fmt.Printf("Delete URL: %s \n", data.File.Delete)
 	}
 }
