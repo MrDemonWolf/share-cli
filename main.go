@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/mitchellh/go-homedir"
 )
 
 // Config ...
@@ -71,7 +73,12 @@ func newfileUploadRequest(uri string, headers map[string]string, paramName, path
 	return req, err
 }
 func main() {
-	f, err := os.Open("config.yml")
+	config, err := homedir.Expand("~/.config/share-cli/config.yml")
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+	f, err := os.Open(config)
 	if err != nil {
 		log.Println(err)
 		log.Print("Please create a config file.")
