@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -73,71 +74,47 @@ func newfileUploadRequest(uri string, headers map[string]string, paramName, path
 	return req, err
 }
 
-func init() {
-
-	config, err := homedir.Expand("~/.config/share-cli/config.yml")
+func main() {
+	config, err := homedir.Expand("~/.config/share-cli")
 	if err != nil {
 		log.Println(err)
 		os.Exit(1)
 	}
-	f, err := os.Open(config)
+	f, err := os.Open(config + "/config.yml")
 	if err != nil {
-		c := Config{}
-		d, err := yaml.Marshal(&c)
+		err = os.MkdirAll(config, os.ModePerm)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 
-		configFilePath, err := homedir.Expand("~/.config/share-cli/config.yml")
-		if err != nil {
-			log.Println(err)
-			os.Exit(1)
-		}
-		// Open a new file for writing only
-		file, err := os.OpenFile(
-			configFilePath,
-			os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
-			0666,
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
+		c := Config{}
+		d, err := yaml.Marshal(&c)
 
-		// Write bytes to file
-		byteSlice := []byte(d)
-		bytesWritten, err := file.Write(byteSlice)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("error: %v", err)
 		}
-		log.Printf("Wrote %d bytes.\n", bytesWritten)
+		// Write bytes to file
+		err = ioutil.WriteFile(config+"/config.yml", []byte(d), 0644)
 		log.Print("Created config file please open ~/.config/share-cli/config.yml")
 		log.Print("URL: The server API URL (https://example.com/api/v1/upload")
 		log.Print("APIKEY: Your API key for using for auth")
 		os.Exit(1)
 	}
-	defer f.Close()
-}
-
-func main() {
-	config, err := homedir.Expand("~/.config/share-cli/config.yml")
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
-	}
-	f, err := os.Open(config)
-	if err != nil {
-		log.Println(err)
-		log.Print("Please create a config file.")
-		os.Exit(1)
-	}
-	defer f.Close()
 
 	var cfg Config
 	decoder := yaml.NewDecoder(f)
 	err = decoder.Decode(&cfg)
 	if err != nil {
 		log.Println(err)
+
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	if len(cfg.Server.URL) <= 0 && len(cfg.Creds.APIKEY) <= 0 {
+		fmt.Println("You MUST put URL of the server you want to upload the file to.")
+		fmt.Println("Token must be provided for the server to know who you are.")
+
 		os.Exit(1)
 	}
 
