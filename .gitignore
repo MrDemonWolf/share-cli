@@ -24,6 +24,6 @@
 
 # End of https://www.gitignore.io/api/go
 
-share-cli
+share-cli*
 
 README.md.template
