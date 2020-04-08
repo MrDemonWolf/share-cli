@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -72,29 +73,62 @@ func newfileUploadRequest(uri string, headers map[string]string, paramName, path
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req, err
 }
+
 func main() {
-	config, err := homedir.Expand("~/.config/share-cli/config.yml")
+	config, err := homedir.Expand("~/.config/share-cli")
 	if err != nil {
 		log.Println(err)
 		os.Exit(1)
 	}
-	f, err := os.Open(config)
+	f, err := os.Open(config + "/config.yml")
 	if err != nil {
-		log.Println(err)
-		log.Print("Please create a config file.")
+		err = os.MkdirAll(config, os.ModePerm)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		c := Config{}
+		d, err := yaml.Marshal(&c)
+
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+		// Write bytes to file
+		err = ioutil.WriteFile(config+"/config.yml", []byte(d), 0644)
+		log.Print("Created config file please open ~/.config/share-cli/config.yml")
+		log.Print("URL: The server API URL (https://example.com/api/v1/upload")
+		log.Print("APIKEY: Your API key for using for auth")
 		os.Exit(1)
 	}
-	defer f.Close()
 
 	var cfg Config
 	decoder := yaml.NewDecoder(f)
 	err = decoder.Decode(&cfg)
 	if err != nil {
 		log.Println(err)
+
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	if len(cfg.Server.URL) <= 0 && len(cfg.Creds.APIKEY) <= 0 {
+		fmt.Println("You MUST put URL of the server you want to upload the file to.")
+		fmt.Println("Token must be provided for the server to know who you are.")
+
 		os.Exit(1)
 	}
 
-	filePtr := flag.String("file", "", "File to upload to your share server (Required)")
+	if len(cfg.Server.URL) <= 0 {
+		fmt.Println("You MUST put URL of the server you want to upload the file to.")
+		os.Exit(1)
+	}
+	if len(cfg.Creds.APIKEY) <= 0 {
+		fmt.Println("Token must be provided for the server to know who you are.")
+		os.Exit(1)
+	}
+
+	filePtr := flag.String("f", "", "File to upload to your share server (Required)")
+	pathPtr := flag.Bool("p", true, "If this is false it will not add the path to the file.")
 	flag.Parse()
 
 	if *filePtr == "" {
@@ -108,10 +142,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	var file = *filePtr
+
+	if *pathPtr == true {
+		file = path + "/" + *filePtr
+	}
+
 	headers := map[string]string{
 		"Authorization": "Bearer" + " " + cfg.Creds.APIKEY,
 	}
-	request, err := newfileUploadRequest(cfg.Server.URL, headers, "file", path+"/"+*filePtr)
+
+	request, err := newfileUploadRequest(cfg.Server.URL, headers, "file", file)
 	if err != nil {
 		log.Fatal(err)
 	}
