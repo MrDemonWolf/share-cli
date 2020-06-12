@@ -10,12 +10,14 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
 	"github.com/mrdemonwolf/share-cli/pkg/config"
 )
 
+// ResponseFile ...
 type ResponseFile struct {
 	Name      string `json:"name"`
 	Ext       string `json:"ext"`
@@ -32,6 +34,13 @@ type Response struct {
 	Error   string       `json:"error"`
 	File    ResponseFile `json:"file"`
 	Status  int          `json:"status"`
+}
+
+// LinkFormData ...
+type LinkFormData struct {
+	URL   string
+	Code  string
+	Limit string
 }
 
 // Creates a new file upload http request with optional extra params
@@ -66,6 +75,23 @@ func newfileUploadRequest(uri string, headers map[string]string, paramName, path
 	return req, err
 }
 
+func newLinkRequest(uri string, headers map[string]string, formData *LinkFormData) (*http.Request, error) {
+	log.Println(formData)
+	data := url.Values{}
+	data.Set("url", formData.URL)
+	// uncommented due to validdation errors
+	// data.Set("code", formData.Code)
+	// data.Set("limit", formData.Limit)
+
+	// Does the request with the headers
+	req, err := http.NewRequest("POST", uri+"/api/v2/link", bytes.NewBuffer([]byte(data.Encode())))
+	for key, val := range headers {
+		req.Header.Set(key, val)
+	}
+	req.Header.Set("User-Agent", "Share-CLI/1.0")
+	return req, err
+}
+
 func main() {
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -81,7 +107,7 @@ func main() {
 
 	// This is for shortening alink
 	linkShotenCommand := flag.NewFlagSet("link", flag.ExitOnError)
-	urlPtr := linkShotenCommand.String("u", "", "File to upload to your share server.")
+	urlPtr := linkShotenCommand.String("u", "", "File to upload to your share server. (Required)")
 	limitPtr := linkShotenCommand.String("l", "", "File to upload to your share server.")
 	// limitPtr := fileUploadCommand.String("f", "", "File to upload to your share server.")
 
@@ -126,13 +152,15 @@ func main() {
 		}
 
 		request, err := newfileUploadRequest(cfg.Server.URL, headers, "file", file)
+
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			return
 		}
 		client := &http.Client{}
 		resp, err := client.Do(request)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		} else {
 			defer resp.Body.Close()
 
@@ -151,32 +179,45 @@ func main() {
 		}
 	}
 	if linkShotenCommand.Parsed() {
+		if *urlPtr == "" {
+			linkShotenCommand.PrintDefaults()
+			return
+		}
 
-		// headers := map[string]string{
-		// 	"Authorization": "Bearer" + " " + cfg.Creds.APIKEY,
-		// }
+		headers := map[string]string{
+			"Authorization": "Bearer" + " " + cfg.Creds.APIKEY,
+			"Content-Type":  "application/x-www-form-urlencoded",
+		}
 
-		// request, err := newfileUploadRequest(cfg.Server.URL, headers, "file", file)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// client := &http.Client{}
-		// resp, err := client.Do(request)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// } else {
-		// 	defer resp.Body.Close()
+		data := &LinkFormData{
+			URL:   *urlPtr,
+			Limit: *limitPtr,
+		}
 
-		// 	data := new(Response)
+		request, err := newLinkRequest(cfg.Server.URL, headers, data)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		client := &http.Client{}
+		resp, err := client.Do(request)
+		if err != nil {
+			log.Println(err)
+		} else {
+			defer resp.Body.Close()
 
-		// 	json.NewDecoder(resp.Body).Decode(data)
+			// 	data := new(Response)
 
-		// 	fmt.Print("Your shorted link has been created")
-		// 	fmt.Printf("URL: %s \n", data.File.URL)
-		// 	fmt.Printf("Delete URL: %s \n", data.File.Delete)
-		// }
-		fmt.Print("Your shorted link has been created")
+			// 	json.NewDecoder(resp.Body).Decode(data)
 
+			// 	fmt.Print("Your shorted link has been created")
+			// 	fmt.Printf("URL: %s \n", data.File.URL)
+			// 	fmt.Printf("Delete URL: %s \n", data.File.Delete)
+			// }
+			fmt.Print("Your shorted link has been created \n")
+			fmt.Printf("URL: %s \n", *urlPtr)
+			// fmt.Printf("Delete URL: %s \n", data.File.Delete)
+		}
 	}
 
 }
