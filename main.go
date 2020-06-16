@@ -27,13 +27,32 @@ type ResponseFile struct {
 	DeleteKey string `json:"deleteKey"`
 }
 
+// ResponseLink ...
+type ResponseLink struct {
+	URL       string `json:"url"`
+	Code      string `json:"code"`
+	Limit     string `json:"limit"`
+	NewURL    string `json:"newurl"`
+	Delete    string `json:"delete"`
+	DeleteKey string `json:"deleteKey"`
+}
+
+// ResponseErrors ...
+type ResponseErrors struct {
+	Code string `json:"code"`
+	URL  string `json:"url"`
+	Tags string `json:"tags"`
+}
+
 // Response Json ...
 type Response struct {
-	Auth    bool         `json:"auth"`
-	Success bool         `json:"success"`
-	Error   string       `json:"error"`
-	File    ResponseFile `json:"file"`
-	Status  int          `json:"status"`
+	Auth    bool           `json:"auth"`
+	Success bool           `json:"success"`
+	Error   string         `json:"error"`
+	Errors  ResponseErrors `json:"errors"`
+	File    ResponseFile   `json:"file"`
+	Link    ResponseLink   `json:"link"`
+	Status  int            `json:"status"`
 }
 
 // LinkFormData ...
@@ -76,12 +95,16 @@ func newfileUploadRequest(uri string, headers map[string]string, paramName, path
 }
 
 func newLinkRequest(uri string, headers map[string]string, formData *LinkFormData) (*http.Request, error) {
-	log.Println(formData)
 	data := url.Values{}
-	data.Set("url", formData.URL)
-	// uncommented due to validdation errors
-	// data.Set("code", formData.Code)
-	// data.Set("limit", formData.Limit)
+	if formData.URL != "" {
+		data.Set("url", formData.URL)
+	}
+	if formData.Code != "" {
+		data.Set("code", formData.Code)
+	}
+	if formData.Limit != "" {
+		data.Set("limit", formData.Limit)
+	}
 
 	// Does the request with the headers
 	req, err := http.NewRequest("POST", uri+"/api/v2/link", bytes.NewBuffer([]byte(data.Encode())))
@@ -108,11 +131,8 @@ func main() {
 	// This is for shortening alink
 	linkShotenCommand := flag.NewFlagSet("link", flag.ExitOnError)
 	urlPtr := linkShotenCommand.String("u", "", "File to upload to your share server. (Required)")
-	limitPtr := linkShotenCommand.String("l", "", "File to upload to your share server.")
-	// limitPtr := fileUploadCommand.String("f", "", "File to upload to your share server.")
-
-	_ = urlPtr
-	_ = limitPtr
+	limitPtr := linkShotenCommand.String("l", "", "Limit on link clicks.")
+	codePtr := linkShotenCommand.String("c", "", "Custom short link code.")
 
 	if len(os.Args) < 2 {
 		fmt.Println("upload or link subcommand is required")
@@ -168,13 +188,13 @@ func main() {
 
 			json.NewDecoder(resp.Body).Decode(data)
 
-			if data.Status != 200 {
-				fmt.Printf("Error: %s \n", data.Error)
-
-			} else {
+			if data.Status == 200 {
 				fmt.Print("Your file has been uploaded")
 				fmt.Printf("URL: %s \n", data.File.URL)
 				fmt.Printf("Delete URL: %s \n", data.File.Delete)
+			} else {
+				fmt.Printf("Error: %s \n", data.Error)
+
 			}
 		}
 	}
@@ -192,6 +212,7 @@ func main() {
 		data := &LinkFormData{
 			URL:   *urlPtr,
 			Limit: *limitPtr,
+			Code:  *codePtr,
 		}
 
 		request, err := newLinkRequest(cfg.Server.URL, headers, data)
@@ -206,17 +227,26 @@ func main() {
 		} else {
 			defer resp.Body.Close()
 
-			// 	data := new(Response)
+			data := new(Response)
 
-			// 	json.NewDecoder(resp.Body).Decode(data)
+			json.NewDecoder(resp.Body).Decode(data)
 
-			// 	fmt.Print("Your shorted link has been created")
-			// 	fmt.Printf("URL: %s \n", data.File.URL)
-			// 	fmt.Printf("Delete URL: %s \n", data.File.Delete)
-			// }
-			fmt.Print("Your shorted link has been created \n")
-			fmt.Printf("URL: %s \n", *urlPtr)
-			// fmt.Printf("Delete URL: %s \n", data.File.Delete)
+			if data.Status == 200 {
+				// 	fmt.Print("Your shorted link has been created")
+				// 	fmt.Printf("URL: %s \n", data.File.URL)
+				// 	fmt.Printf("Delete URL: %s \n", data.File.Delete)
+				// }
+				fmt.Print("Your shorted link has been created \n")
+				fmt.Printf("New URL: %s \n", data.Link.NewURL)
+				if data.Link.Code != "" {
+					fmt.Printf("Click Limit: %s \n", data.Link.Limit)
+				}
+				fmt.Printf("Delete URL: %s \n", data.Link.Delete)
+
+			} else {
+				fmt.Printf("Error: %s %s %s  \n", data.Errors.Code, data.Errors.URL, data.Errors.Tags)
+			}
+
 		}
 	}
 
